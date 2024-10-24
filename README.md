@@ -23,6 +23,10 @@ This project is a Python-based Bitcoin CLI application designed to interact with
     ```
 
    - Create `.env` file and add database credentials
+   - Run Alembic Migration:
+   ```bash
+   alembic upgrade head
+   ```
 
 2. Available Commands
    - Create a New Wallet
