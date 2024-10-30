@@ -1,5 +1,9 @@
 import requests
 from bit import PrivateKeyTestnet
+from bit.network import NetworkAPI
+from bitcoin.core import b2lx, x
+from bitcoin.core.script import CScript
+from bitcoin.core import CTransaction
 
 from app.models import Transaction
 
@@ -53,33 +57,33 @@ def save_tx(txid):
 
 def get_tx_details(txid):
     try:
-        base_url = "https://blockstream.info/testnet"
-        url = f"{base_url}/api/tx/{txid}"
-        response = requests.get(url)
-        response.raise_for_status()
+        raw_tx_hex = NetworkAPI.get_transaction_by_id_testnet(txid)
+        raw_tx_bytes = x(raw_tx_hex)
+        tx = CTransaction.deserialize(raw_tx_bytes)
 
-        tx_data = response.json()
-        tx_id = tx_data["txid"]
-        timestamp = tx_data.get("status", {}).get("block_time", "Unconfirmed")
+        tx_id = b2lx(tx.GetTxid())
         inputs = [
-            {"address": inp.get("prevout", {}).get("scriptpubkey_address"), "value": inp.get("prevout", {}).get("value")}
-            for inp in tx_data["vin"]
+            {"txid": b2lx(vin.prevout.hash), "vout": vin.prevout.n}
+            for vin in tx.vin
         ]
         outputs = [
-            {"address": out.get("scriptpubkey_address"), "value": out["value"]}
-            for out in tx_data["vout"]
+            {
+                "address": str(CScript(vout.scriptPubKey)),
+                "value": vout.nValue
+            }
+            for vout in tx.vout
         ]
-        total_input_value = sum(inp["value"] for inp in inputs if inp["value"])
+        total_input_value = sum(inp.get("value", 0) for inp in inputs)
         total_output_value = sum(out["value"] for out in outputs)
         amount = total_input_value - total_output_value
 
         return {
             "tx_id": tx_id,
-            "timestamp": timestamp,
             "inputs": inputs,
             "outputs": outputs,
             "amount": amount,
         }
+
     except Exception as e:
-        print(f"Error fetching transaction details: {e}")
+        print(f"Error fetching or decoding transaction details: {e}")
         return None
